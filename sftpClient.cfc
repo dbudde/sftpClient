@@ -414,6 +414,8 @@ component displayname="sftpClient" accessors="true" output="false"
 				}
 			}
 		}
+
+		return this;
 	}
 
 
