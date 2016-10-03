@@ -102,7 +102,7 @@ component displayname="sftpClient" accessors="true" output="false"
 
 
 		// Determine directory to use.
-		local.directory = formatRelativeDirectory(arguments.directory);
+		local.directory = translateRemotePath(arguments.directory);
 
 
 		// Attempt switching directories.
@@ -162,7 +162,7 @@ component displayname="sftpClient" accessors="true" output="false"
 
 
 		// Determine directory to use.
-		local.directory = formatRelativeDirectory(arguments.directory);
+		local.directory = translateRemotePath(arguments.directory);
 
 		getChannel().mkdir(local.directory);
 	} 
@@ -174,7 +174,7 @@ component displayname="sftpClient" accessors="true" output="false"
 
 
 		// Determine directory to use.
-		local.directory = formatRelativeDirectory(arguments.directory);
+		local.directory = translateRemotePath(arguments.directory);
 
 
 		if (arguments.recursive)
@@ -227,6 +227,21 @@ component displayname="sftpClient" accessors="true" output="false"
 
 
 	/**
+	* @source The file path to the source file on the sftp host.
+	* @destination The path to the folder on the local system of where to download the file.
+	*/
+	public void function downloadFile(required string source, required string destination) hint="Downloads a file to the destination directory."
+	{
+		requireConnection();
+
+		// Determine file location on server.
+		local.source = translateRemotePath(arguments.source, true);
+
+		getChannel().put(local.source, arguments.destination);
+	}
+
+
+	/**
 	* @keyType RSA or DSA.
 	* @keySize The size of the generated key.
 	* @destination The destination folder.
@@ -272,6 +287,56 @@ component displayname="sftpClient" accessors="true" output="false"
 
 
 	/**
+	* @source The file path to the source file on the sftp host.
+	* @destination The path to the folder on the local system of where to download the file.
+	*/
+	public void function get(required string source, required string destination) hint="Downloads a file to the destination directory. Alias for 'downloadFile'."
+	{
+		downloadFile(arguments.source, arguments.destination);
+	}
+
+
+	public struxt function getConnectionInfo() hint="Returns information on the current connection."
+	{
+		local.info =
+		{
+			"host": getHost(),
+			"isConnected": isConnected(),
+			"port": getPort(),
+			"timeout": getTimeout(),
+			"username": getUsername()
+		};
+
+
+		// Grab proxy information.
+		if (len(getProxyHost()))
+		{
+			local.info["proxy"] = {};
+			local.info.proxy["host"] = getProxyHost();
+
+			if (len(getProxyPort()))
+			{
+				local.info.proxy["port"] = getProxyPort();
+			}
+
+			if (len(getProxyUsername()))
+			{
+				local.info.proxy["username"] = getProxyUsername();
+			}
+		}
+
+
+		// Connected, so grab current directory information.
+		if (isConnected())
+		{
+			local.info["currentDirectory"] = getCurrentDirectory();
+
+			local.info["currentDirectoryList"] = getDirectoryList();
+		}
+	}
+
+
+	/**
 	* @directory 
 	* @host The host the key should be associated with. Defaults to connection host if not supplied.
 	*/
@@ -285,7 +350,7 @@ component displayname="sftpClient" accessors="true" output="false"
 
 		if (structKeyExists(arguments, "directory") && len(arguments.directory))
 		{
-			local.directory = formatRelativeDirectory(arguments.directory);
+			local.directory = translateRemotePath(arguments.directory);
 		}
 
 
@@ -393,7 +458,7 @@ component displayname="sftpClient" accessors="true" output="false"
 	}
 
 
-	public void function init() hint="Constructor."
+	public any function init() hint="Constructor."
 	{
 		setSessionConfig({});
 		setPort(22);
@@ -414,7 +479,7 @@ component displayname="sftpClient" accessors="true" output="false"
 				}
 			}
 		}
-
+		
 		return this;
 	}
 
@@ -470,8 +535,8 @@ component displayname="sftpClient" accessors="true" output="false"
 	{
 		requireConnection();
 
-		local.source = formatRelativeDirectory(arguments.source);
-		local.destination = formatRelativeDirectory(arguments.destination);
+		local.source = translateRemotePath(arguments.source);
+		local.destination = translateRemotePath(arguments.destination);
 
 		getChannel().rename(local.source, local.destination);
 	}
@@ -529,7 +594,7 @@ component displayname="sftpClient" accessors="true" output="false"
 
 		if (structKeyExists(arguments, "destination") && len(arguments.destination))
 		{
-			local.destination = formatRelativeDirectory(arguments.destination);
+			local.destination = translateRemotePath(arguments.destination);
 		}
 
 		getChannel().put(arguments.source, local.destination);
@@ -693,7 +758,8 @@ component displayname="sftpClient" accessors="true" output="false"
 	} 
 
 
-	private string function formatRelativeDirectory(required string directory) hint="Deterines if the directory is relative and formats it using current directory." 
+	private string function translateRemotePath(required string directory, required boolean isFile = false) 
+			hint="Deterines if the directory is relative and formats it using current directory." 
 	{
 		local.directory = arguments.directory;
 
@@ -703,7 +769,7 @@ component displayname="sftpClient" accessors="true" output="false"
 		}
 
 
-		if (right(local.directory, 1) != "/")
+		if (right(local.directory, 1) != "/" && !arguments.isFile)
 		{
 			local.directory &= "/";
 		}
