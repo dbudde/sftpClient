@@ -38,6 +38,8 @@ component displayname="sftpClient" accessors="true" output="false"
 	property name="fingerPrint" type="string" hint="The fingerprint to use to identify the Host's key as valid.";
 	property name="host" type="string" setter="false" hint="The host to connect to." ;
 	property name="hostKey" type="struct" getter="false" setter="false" hint="The host key of the currently set host.";
+	property name="logger";
+	property name="loggerProxy";
 	property name="password" type="string" hint="The password to use when connecting to the host";
 	property name="port" type="numeric" hint="The port to use when connecting to the SFTP server. (Default: 22)";
 	property name="proxyHost" type="string";
@@ -125,6 +127,12 @@ component displayname="sftpClient" accessors="true" output="false"
 
 		// Record new current directory.
 		setCurrentDirectory(local.directory);
+	}
+
+
+	public void function clearLogs() hint="Clears the logs array."
+	{
+		getLogger().clearLogs();
 	}
 
 
@@ -296,7 +304,7 @@ component displayname="sftpClient" accessors="true" output="false"
 	}
 
 
-	public struxt function getConnectionInfo() hint="Returns information on the current connection."
+	public struct function getConnectionInfo() hint="Returns information on the current connection."
 	{
 		local.info =
 		{
@@ -333,6 +341,9 @@ component displayname="sftpClient" accessors="true" output="false"
 
 			local.info["currentDirectoryList"] = getDirectoryList();
 		}
+
+
+		return local.info;
 	}
 
 
@@ -416,7 +427,9 @@ component displayname="sftpClient" accessors="true" output="false"
 			}
 
 			local.sftpSession.connect();
+
 			local.hostKey = local.sftpSession.getHostKey();
+			
 			local.sftpSession.disconnect();
 
 			local.hostKey = convertHostKey(local.hostKey);
@@ -458,6 +471,12 @@ component displayname="sftpClient" accessors="true" output="false"
 	}
 
 
+	public array function getLogs() hint="Retrieves the recorded logs from the logger."
+	{
+		return getLogger().getLogs();
+	}
+
+
 	public any function init() hint="Constructor."
 	{
 		setSessionConfig({});
@@ -468,6 +487,17 @@ component displayname="sftpClient" accessors="true" output="false"
 		setFingerPrint("");
 		setFactory(createObject("java", "com.jcraft.jsch.JSch"));
 		setHostKey({});
+
+
+		local.logger = new sftpClientLogger();
+		local.loggerProxy = createDynamicProxy(local.logger, ["com.jcraft.jsch.Logger"]);
+
+		setLogger(local.logger);
+		setLoggerProxy(local.loggerProxy);
+
+
+		getFactory().setLogger(getLoggerProxy());
+
 
 		if (!structIsEmpty(arguments))
 		{
@@ -567,6 +597,12 @@ component displayname="sftpClient" accessors="true" output="false"
 	}
 
 
+	public void function setLogLevel(required string level = "warn") hint="Sets the level as to what to store in the logging object. ()"
+	{
+		getLogger().setLogLevel(arguments.level);
+	}
+
+
 	public void function setStrictHostKeyChecking(required boolean strict = true)
 	{
 		if (arguments.strict)
@@ -598,6 +634,18 @@ component displayname="sftpClient" accessors="true" output="false"
 		}
 
 		getChannel().put(arguments.source, local.destination);
+	}
+
+
+	/**
+	* @logFilePath - Fully expanded path to a log file to write to.
+	* @fieldDelimiter - The delimiter to be used between fields. Defaults to a tab.
+	* @lineDelimiter - The delimiter to be used between log lines. Defaults to Carriage Return and Line Feed.
+	*/
+	public void function writeLog(required string logFilePath, string fieldDelimiter = chr(9), string lineDelimiter = chr(13) & chr(10)) 
+		hint="Writes the logs to a file.  Creates the directory path and file if it does not exist."
+	{
+		getLogger().writeLog(argumentCollection = arguments);
 	}
 
 
@@ -677,11 +725,36 @@ component displayname="sftpClient" accessors="true" output="false"
 	}
 
 
+	private any function convertEntryArray(required any entryArray) hint="Converts a 'ls' entry array." 
+	{
+		local.entryArray = [];
+
+		for (local.entry in arguments.entryArray)
+		{
+			local.convertedEntry = convertEntry(local.entry);
+
+			if (!listFind(".,..", local.convertedEntry.filename))
+			{
+				local.entryArray.append(local.convertedEntry);
+			}
+		}
+
+		return local.entryArray;
+	}
+
+
+	private date function convertEpochTime(required numeric dateSeconds) hint="Converts numeric epoch date to datetime." 
+	{
+		local.startDate = createODBCDateTime("1970-01-01 00:00:00.000");
+
+		return dateConvert("utc2local", dateAdd("s", arguments.dateSeconds, local.startDate));
+	}
+
+
 	private any function createSession() hint="Creates the SFTP session."
 	{
 		local.config = getSessionConfig();
 		local.factory = getFactory();
-
 
 		local.sftpSession = local.factory.getSession(getUsername(), getHost(), getPort());
 
@@ -711,32 +784,6 @@ component displayname="sftpClient" accessors="true" output="false"
 		}
 
 		return local.sftpSession;
-	}
-
-
-	private any function convertEntryArray(required any entryArray) hint="Converts a 'ls' entry array." 
-	{
-		local.entryArray = [];
-
-		for (local.entry in arguments.entryArray)
-		{
-			local.convertedEntry = convertEntry(local.entry);
-
-			if (!listFind(".,..", local.convertedEntry.filename))
-			{
-				local.entryArray.append(local.convertedEntry);
-			}
-		}
-
-		return local.entryArray;
-	}
-
-
-	private date function convertEpochTime(required numeric dateSeconds) hint="Converts numeric epoch date to datetime." 
-	{
-		local.startDate = createODBCDateTime("1970-01-01 00:00:00.000");
-
-		return dateConvert("utc2local", dateAdd("s", arguments.dateSeconds, local.startDate));
 	}
 
 
