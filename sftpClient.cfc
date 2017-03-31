@@ -805,27 +805,6 @@ component displayname="sftpClient" accessors="true" output="false"
 	} 
 
 
-	private string function translateRemotePath(required string directory, required boolean isFile = false) 
-			hint="Deterines if the directory is relative and formats it using current directory." 
-	{
-		local.directory = arguments.directory;
-
-		if (left(local.directory, 1) != "/")
-		{
-			local.directory = getCurrentDirectory() & local.directory;
-		}
-
-
-		if (right(local.directory, 1) != "/" && !arguments.isFile)
-		{
-			local.directory &= "/";
-		}
-
-
-		return local.directory;
-	}
-
-
 	private void function loadSession() hint="Loads the SFTP session."
 	{
 		setSFTPSession(createSession());
@@ -858,6 +837,27 @@ component displayname="sftpClient" accessors="true" output="false"
 	private void function setHostKey(required struct hostKey) hint="Set the host key."
 	{
 		variables.hostKey = arguments.hostKey;
+	}
+
+
+	private string function translateRemotePath(required string directory, required boolean isFile = false) 
+			hint="Deterines if the directory is relative and formats it using current directory." 
+	{
+		local.directory = arguments.directory;
+
+		if (left(local.directory, 1) != "/")
+		{
+			local.directory = getCurrentDirectory() & local.directory;
+		}
+
+
+		if (right(local.directory, 1) != "/" && !arguments.isFile)
+		{
+			local.directory &= "/";
+		}
+
+
+		return local.directory;
 	}
 
 
